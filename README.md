@@ -1,53 +1,96 @@
 # certbot-regru
-Reg.ru DNS authenticator plugin for Certbot
 
-An authenticator plugin for [certbot](https://certbot.eff.org/) to support [Let's Encrypt](https://letsencrypt.org/) 
-DNS challenges (dns-01) for domains managed by the nameservers of [Reg.ru](https://www.reg.ru).
+Плагин-аутентификатор Reg.ru DNS для Certbot.
 
-## Requirements
+Форк оригинального проекта [free2er/certbot-regru](https://github.com/free2er/certbot-regru),
+распространяется на условиях той же лицензии MIT (см. [LICENSE.txt](LICENSE.txt)).
+
+Плагин для [certbot](https://certbot.eff.org/), реализующий поддержку DNS-проверок (dns-01)
+[Let's Encrypt](https://letsencrypt.org/) для доменов, обслуживаемых серверами имён
+[Reg.ru](https://www.reg.ru).
+
+## Требования
 * certbot (>=0.21.1)
 
-For older Ubuntu distributions check out this PPA: 
+Для старых версий Ubuntu используйте PPA:
 [ppa:certbot/certbot](https://launchpad.net/~certbot/+archive/ubuntu/certbot)
 
-## Installation
-1. First install the plugin:
+## Установка
+1. Установите плагин из этого репозитория (пакет `certbot-regru` в PyPI — это
+   оригинальный проект free2er, он не содержит правок из раздела
+   [«Изменения относительно оригинала»](#изменения-относительно-оригинала); чтобы
+   получить именно этот форк, ставьте его из исходников):
    ```
-   sudo pip install certbot-regru
+   git clone git@git.bonnyfacy.ru:bonnyfacy/Certbot-RegRU-plugin.git
+   cd Certbot-RegRU-plugin
+   sudo pip install .
    ```
 
-2. Configure it with your Reg.ru Credentials:
+2. Укажите учётные данные Reg.ru:
    ```
    sudo vim /etc/letsencrypt/regru.ini
    ```
 
-3. Make sure the file is only readable by root! Otherwise all your domains might be in danger:
+3. Ограничьте доступ к файлу — иначе под угрозой окажутся все ваши домены:
    ```
    sudo chmod 0600 /etc/letsencrypt/regru.ini
    ```
 
-## Usage
-Request new certificates via a certbot invocation like this:
+## Использование
+Запрос нового сертификата:
 
-    sudo certbot certonly -a certbot-regru:dns -d sub.domain.tld -d *.wildcard.tld
+    sudo certbot certonly -a dns -d sub.domain.tld -d *.wildcard.tld
 
-Renewals will automatically be performed using the same authenticator and credentials by certbot.
+Продление сертификата certbot выполняет автоматически с теми же аутентификатором и учётными данными.
 
-## Command Line Options
+> В старых версиях certbot плагин можно было указывать как `certbot-regru:dns`
+> (с флагами вида `--certbot-regru:dns-credentials`). Эта форма имени была помечена
+> устаревшей ещё в certbot 1.x, а в актуальных версиях certbot (проверено на 5.8.0)
+> уже не распознаётся вовсе — используйте короткое имя `dns`, как показано выше.
+
+## Параметры командной строки
 ```
- --certbot-regru:dns-propagation-seconds PROPAGATION_SECONDS
+ --dns-propagation-seconds DNS_PROPAGATION_SECONDS
                         The number of seconds to wait for DNS to propagate
-                        before asking the ACME server to verify the DNS record. 
-                        (default: 120)
- --certbot-regru:dns-credentials PATH_TO_CREDENTIALS
-                        Path to Reg.ru account credentials INI file 
-                        (default: /etc/letsencrypt/regru.ini)
-
+                        before asking the ACME server to verify the DNS
+                        record. (default: 600)
+ --dns-credentials DNS_CREDENTIALS
+                        Path to Reg.ru credentials INI file (default:
+                        /etc/letsencrypt/regru.ini)
 ```
 
-See also `certbot --help certbot-regru:dns` for further information.
+Это ровно то, что выводит `certbot --help dns` — сам текст справки задаётся базовым
+классом certbot и не зависит от плагина, плагин передаёт в него только значения по
+умолчанию. Реальное поведение `--dns-propagation-seconds` после правок этого форка
+шире, чем сказано в тексте справки, — см. первый пункт раздела
+[«Изменения относительно оригинала»](#изменения-относительно-оригинала).
 
-## Removal
+## Удаление
    ```
    sudo pip uninstall certbot-regru
    ```
+
+## Изменения относительно оригинала
+
+По сравнению с [оригинальным проектом free2er/certbot-regru](https://github.com/free2er/certbot-regru)
+в этот форк внесены следующие правки:
+
+* **Активное ожидание распространения DNS-записи вместо фиксированной паузы.**
+  Раньше плагин просто «спал» заданное число секунд (по умолчанию 120) перед проверкой
+  ACME-сервером. Теперь он опрашивает публичные DNS-резолверы (1.1.1.1, 1.0.0.1) и
+  продолжает выполнение, как только добавленная TXT-запись становится видимой — не дожидаясь
+  полного тайм-аута. Значение `--dns-propagation-seconds` при этом стало верхней границей
+  ожидания (default увеличен со 120 до 600 секунд) на случай медленного распространения
+  записи, а не гарантированной задержкой; сам текст справки certbot для этого параметра
+  не менялся (он задан в самом certbot), новое поведение описано только здесь. Добавлена
+  зависимость `dnspython`.
+* **Тайм-аут HTTP-запросов к API Reg.ru.** Запросы к `api.reg.ru` раньше не имели тайм-аута
+  и могли зависнуть навсегда при проблемах на стороне API. Добавлен тайм-аут 30 секунд.
+* **Пароль больше не попадает в debug-логи.** При отладочном логировании запросов к API
+  (добавление/удаление TXT-записи) пароль учётной записи теперь маскируется (`***`).
+* **Исправлена ошибка в логировании исключений** при добавлении TXT-записи (некорректная
+  форматная строка `logger.error` приводила к падению самого обработчика ошибки).
+* Плагин зарегистрирован в certbot под коротким именем `dns` (флаг `-a dns`, опции
+  `--dns-propagation-seconds` и `--dns-credentials`, без префикса `certbot-regru:`) —
+  это не правка данного форка, а поведение самого certbot, но README апстрима этого
+  не отражал; см. предупреждение в разделе «Использование».
