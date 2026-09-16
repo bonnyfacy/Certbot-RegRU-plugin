@@ -7,6 +7,7 @@ install_requires = [
     'acme>=0.21.1',
     'certbot>=0.21.1',
     'requests>=2.9.1',
+    'dnspython>=1.15.0',
     'mock',
     'setuptools',
     'zope.interface',
