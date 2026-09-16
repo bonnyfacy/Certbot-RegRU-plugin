@@ -114,6 +114,40 @@
 шире, чем сказано в тексте справки, — см. первый пункт раздела
 [«Изменения относительно оригинала»](#изменения-относительно-оригинала).
 
+## Обновление
+
+Если плагин установлен в отдельный venv (см.
+[«Установка в отдельном venv»](#установка-в-отдельном-venv)):
+
+1. Обновите репозиторий и переустановите плагин в этом же venv:
+   ```
+   cd /path/to/Certbot-RegRU-plugin
+   git pull
+   /opt/certbot/bin/pip install --upgrade .
+   ```
+
+2. **Важно:** `pip install`, в том числе `--upgrade`, при каждом запуске заново копирует
+   шаблон `regru.ini` из пакета поверх `/etc/letsencrypt/regru.ini` (это поведение `data_files`
+   в `setup.py`, от venv не зависит). Если файл по этому пути уже содержит ваши боевые
+   учётные данные, обновление **перезапишет их тестовыми значениями**
+   (`dns_username=test`, `dns_password=test`), и ближайшее продление сертификата сломается
+   с ошибкой авторизации на стороне Reg.ru. Сделайте бэкап перед обновлением и верните его сразу после:
+   ```
+   sudo cp /etc/letsencrypt/regru.ini /etc/letsencrypt/regru.ini.bak
+   /opt/certbot/bin/pip install --upgrade .
+   sudo cp /etc/letsencrypt/regru.ini.bak /etc/letsencrypt/regru.ini
+   ```
+
+3. Проверьте, что certbot видит новую версию плагина и продление по-прежнему работает:
+   ```
+   /opt/certbot/bin/certbot plugins
+   sudo /opt/certbot/bin/certbot renew --dry-run
+   ```
+
+При установке в системный Python (без venv) риск перезаписи `regru.ini` тот же — команда
+обновления будет `sudo pip install --upgrade .`, шаги 2–3 применимы так же, только без
+префикса `/opt/certbot/bin/`.
+
 ## Удаление
    ```
    sudo pip uninstall certbot-regru-plugin
