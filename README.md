@@ -21,7 +21,7 @@
    оригинальный проект free2er, не содержащий правок из раздела
    [«Изменения относительно оригинала»](#изменения-относительно-оригинала):
    ```
-   git clone git@git.bonnyfacy.ru:bonnyfacy/Certbot-RegRU-plugin.git
+   git clone https://git.bonnyfacy.ru/bonnyfacy/Certbot-RegRU-plugin.git
    cd Certbot-RegRU-plugin
    sudo pip install .
    ```
@@ -50,16 +50,16 @@
 1. Создайте venv и сразу обновите в нём pip (см. пояснение к шагу 3 — от версии
    pip зависит, куда установится файл-заготовка `regru.ini`):
    ```
-   python3 -m venv /opt/certbot-regru-plugin
-   /opt/certbot-regru-plugin/bin/pip install --upgrade pip
+   python3 -m venv /opt/certbot
+   /opt/certbot/bin/pip install --upgrade pip
    ```
 
 2. Установите плагин в это окружение; certbot будет установлен в него же
    автоматически как зависимость (см. [Требования](#требования)):
    ```
-   git clone git@git.bonnyfacy.ru:bonnyfacy/Certbot-RegRU-plugin.git
+   git clone https://git.bonnyfacy.ru/bonnyfacy/Certbot-RegRU-plugin.git
    cd Certbot-RegRU-plugin
-   /opt/certbot-regru-plugin/bin/pip install .
+   /opt/certbot/bin/pip install .
    ```
 
 3. Создайте файл с учётными данными вручную, не полагаясь на автоматическую
@@ -80,7 +80,7 @@
 4. certbot обнаруживает плагины только в том окружении, из которого запущен, —
    вызывайте бинарник из venv, а не системный `certbot`:
    ```
-   sudo /opt/certbot-regru-plugin/bin/certbot certonly -a dns -d sub.domain.tld -d *.wildcard.tld
+   sudo /opt/certbot/bin/certbot certonly -a dns -d sub.domain.tld -d *.wildcard.tld
    ```
    При настройке автопродления (cron/systemd-таймер) указывайте туда же путь к
    venv-версии `certbot`, а не к системной.
