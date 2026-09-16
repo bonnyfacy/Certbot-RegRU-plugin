@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROPAGATION_SECONDS = 600
 DNS_POLL_INTERVAL_SECONDS = 5
-DNS_POLL_NAMESERVERS = ['1.1.1.1', '1.0.0.1']
+# Used only to discover the zone's authoritative nameservers (NS/A lookups), never to check
+# the actual TXT record. NS records change rarely, so caching here isn't a propagation risk.
+BOOTSTRAP_NAMESERVERS = ['1.1.1.1', '1.0.0.1']
 
 
 @zope.interface.implementer(interfaces.IAuthenticator)
@@ -34,6 +36,7 @@ class Authenticator(dns_common.DNSAuthenticator):
     def __init__(self, *args, **kwargs):
         super(Authenticator, self).__init__(*args, **kwargs)
         self.credentials = None
+        self._ns_ip_cache = {}
 
     @classmethod
     def add_parser_arguments(cls, add):  # pylint: disable=arguments-differ
@@ -77,17 +80,15 @@ class Authenticator(dns_common.DNSAuthenticator):
 
     def _wait_for_propagation(self, records):
         """
-        Polls public DNS resolvers for each added TXT record instead of blindly sleeping for
-        the whole propagation-seconds window, so validation proceeds as soon as the records are
-        actually visible (falling back to the old fixed wait if they never become visible).
+        Polls each record's authoritative nameservers directly for the added TXT record,
+        instead of blindly sleeping for the whole propagation-seconds window or relying on
+        public resolvers (which can serve stale cached answers). Let's Encrypt itself resolves
+        directly against authoritative nameservers, so this mirrors what it will actually see.
+        Requires the record to be visible on *every* authoritative nameserver for the zone,
+        since secondaries can lag behind the primary after a zone update.
         """
         timeout = self.conf('propagation-seconds')
         deadline = time.time() + timeout
-
-        resolver = dns.resolver.Resolver(configure=False)
-        resolver.nameservers = DNS_POLL_NAMESERVERS
-        resolver.lifetime = DNS_POLL_INTERVAL_SECONDS
-        resolver.timeout = DNS_POLL_INTERVAL_SECONDS
 
         logger.info('Waiting up to %d seconds for DNS records to propagate...', timeout)
 
@@ -95,7 +96,7 @@ class Authenticator(dns_common.DNSAuthenticator):
         while remaining and time.time() < deadline:
             remaining = [
                 (name, value) for name, value in remaining
-                if not self._txt_record_present(resolver, name, value)
+                if not self._txt_record_present_on_authoritative_ns(name, value)
             ]
             if remaining:
                 time.sleep(DNS_POLL_INTERVAL_SECONDS)
@@ -107,13 +108,62 @@ class Authenticator(dns_common.DNSAuthenticator):
                 timeout, ', '.join(name for name, _ in remaining)
             )
         else:
-            # Small buffer: the CA's own validation servers may still lag slightly behind
-            # the resolvers we just polled.
+            # Small buffer for safety margin even though authoritative NS already confirmed it.
             time.sleep(DNS_POLL_INTERVAL_SECONDS)
 
+    def _txt_record_present_on_authoritative_ns(self, name, value):
+        try:
+            ns_ips = self._authoritative_nameserver_ips(name)
+        except dns.exception.DNSException as e:
+            logger.debug('Could not determine authoritative nameservers for %s: %s', name, e)
+            return False
+
+        if not ns_ips:
+            return False
+
+        return all(self._txt_record_present(ip, name, value) for ip in ns_ips)
+
+    def _authoritative_nameserver_ips(self, name):
+        if name in self._ns_ip_cache:
+            return self._ns_ip_cache[name]
+
+        bootstrap = dns.resolver.Resolver(configure=False)
+        bootstrap.nameservers = BOOTSTRAP_NAMESERVERS
+        bootstrap.lifetime = DNS_POLL_INTERVAL_SECONDS
+        bootstrap.timeout = DNS_POLL_INTERVAL_SECONDS
+        query = getattr(bootstrap, 'resolve', None) or bootstrap.query
+
+        ns_hosts = []
+        for guess in dns_common.base_domain_name_guesses(name):
+            try:
+                answer = query(guess, 'NS')
+            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                    dns.resolver.NoNameservers, dns.exception.Timeout):
+                continue
+            ns_hosts = [str(rdata.target).rstrip('.') for rdata in answer]
+            if ns_hosts:
+                break
+
+        ips = []
+        for host in ns_hosts:
+            try:
+                a_answer = query(host, 'A')
+            except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
+                    dns.resolver.NoNameservers, dns.exception.Timeout):
+                continue
+            ips.extend(str(rdata) for rdata in a_answer)
+
+        self._ns_ip_cache[name] = ips
+        return ips
+
     @staticmethod
-    def _txt_record_present(resolver, name, value):
+    def _txt_record_present(nameserver_ip, name, value):
+        resolver = dns.resolver.Resolver(configure=False)
+        resolver.nameservers = [nameserver_ip]
+        resolver.lifetime = DNS_POLL_INTERVAL_SECONDS
+        resolver.timeout = DNS_POLL_INTERVAL_SECONDS
         query = getattr(resolver, 'resolve', None) or resolver.query
+
         try:
             answer = query(name, 'TXT')
         except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer,
