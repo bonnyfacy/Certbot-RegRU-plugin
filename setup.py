@@ -21,7 +21,7 @@ with open('README.md') as f:
     long_description = f.read()
 
 setup(
-    name='certbot-regru',
+    name='certbot-regru-plugin',
     version=__version__,
     description="Reg.ru DNS authenticator plugin for Certbot",
     long_description=long_description,

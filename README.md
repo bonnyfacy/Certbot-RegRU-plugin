@@ -16,10 +16,10 @@
 [ppa:certbot/certbot](https://launchpad.net/~certbot/+archive/ubuntu/certbot)
 
 ## Установка
-1. Установите плагин из этого репозитория (пакет `certbot-regru` в PyPI — это
-   оригинальный проект free2er, он не содержит правок из раздела
-   [«Изменения относительно оригинала»](#изменения-относительно-оригинала); чтобы
-   получить именно этот форк, ставьте его из исходников):
+1. Установите плагин из этого репозитория. Пакет ставится под именем
+   `certbot-regru-plugin`, чтобы не путать его с `certbot-regru` в PyPI — это
+   оригинальный проект free2er, не содержащий правок из раздела
+   [«Изменения относительно оригинала»](#изменения-относительно-оригинала):
    ```
    git clone git@git.bonnyfacy.ru:bonnyfacy/Certbot-RegRU-plugin.git
    cd Certbot-RegRU-plugin
@@ -35,6 +35,49 @@
    ```
    sudo chmod 0600 /etc/letsencrypt/regru.ini
    ```
+
+### Установка в отдельном venv
+
+Чтобы не смешивать плагин и certbot с системным Python, их можно поставить в
+изолированное виртуальное окружение:
+
+1. Создайте venv и сразу обновите в нём pip (см. пояснение к шагу 3 — от версии
+   pip зависит, куда установится файл-заготовка `regru.ini`):
+   ```
+   python3 -m venv /opt/certbot-regru-plugin
+   /opt/certbot-regru-plugin/bin/pip install --upgrade pip
+   ```
+
+2. Установите плагин в это окружение; certbot будет установлен в него же
+   автоматически как зависимость (см. [Требования](#требования)):
+   ```
+   git clone git@git.bonnyfacy.ru:bonnyfacy/Certbot-RegRU-plugin.git
+   cd Certbot-RegRU-plugin
+   /opt/certbot-regru-plugin/bin/pip install .
+   ```
+
+3. Создайте файл с учётными данными вручную, не полагаясь на автоматическую
+   раскладку `regru.ini` из пакета: в venv она ведёт себя непредсказуемо —
+   со свежим pip (после шага 1) файл-заготовка оказывается не в
+   `/etc/letsencrypt/regru.ini`, а внутри venv
+   (`.../lib/pythonX.Y/site-packages/etc/letsencrypt/regru.ini`), а со старым pip
+   (тем, что стоит в venv по умолчанию, без апгрейда) установка вовсе падает с
+   `Permission denied`, пытаясь писать прямо в системный `/etc/letsencrypt`
+   в обход изоляции venv. Поэтому независимо от версии pip путь `/etc/letsencrypt/regru.ini`
+   проще создать самим:
+   ```
+   sudo mkdir -p /etc/letsencrypt
+   sudo vim /etc/letsencrypt/regru.ini
+   sudo chmod 0600 /etc/letsencrypt/regru.ini
+   ```
+
+4. certbot обнаруживает плагины только в том окружении, из которого запущен, —
+   вызывайте бинарник из venv, а не системный `certbot`:
+   ```
+   sudo /opt/certbot-regru-plugin/bin/certbot certonly -a dns -d sub.domain.tld -d *.wildcard.tld
+   ```
+   При настройке автопродления (cron/systemd-таймер) указывайте туда же путь к
+   venv-версии `certbot`, а не к системной.
 
 ## Использование
 Запрос нового сертификата:
@@ -67,7 +110,7 @@
 
 ## Удаление
    ```
-   sudo pip uninstall certbot-regru
+   sudo pip uninstall certbot-regru-plugin
    ```
 
 ## Изменения относительно оригинала
