@@ -27,8 +27,8 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/free2er/certbot-regru',
-    author="Max Pryakhin",
-    author_email='m.pryakhin@gmail.com',
+    author="bonnyfacy",
+    author_email='bonnyfacy@gmail.com',
     license='MIT',
     python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*',
     classifiers=[

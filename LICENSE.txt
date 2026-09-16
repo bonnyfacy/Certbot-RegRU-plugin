@@ -1,4 +1,5 @@
 Copyright (C) 2018 Max Pryakhin
+Copyright (C) 2026 bonnyfacy
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
